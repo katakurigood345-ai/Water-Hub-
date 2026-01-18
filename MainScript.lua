@@ -1,7 +1,8 @@
--- [[ CONFIGURATION ]] --
-local SAVE_FILE = "WaterHub_HunterLogs.json"
+-- [[ WATER HUB CONFIG ]] --
+local VERSION = "v1.4"
+local ACCENT_COLOR = Color3.fromRGB(0, 170, 255) -- Water Blue
+local SAVE_FILE = "WaterHub_Data.json"
 local MIN_VALUE = 10000000 -- 10M
-local AUTO_JOIN_ENABLED = false -- Can be toggled in GUI
 
 -- [[ SERVICES ]] --
 local HttpService = game:GetService("HttpService")
@@ -9,133 +10,156 @@ local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 
--- [[ DATA MANAGEMENT ]] --
+-- [[ FILE SYSTEM ]] --
 local function getLogs()
     if isfile(SAVE_FILE) then
-        local success, data = pcall(function() return HttpService:JSONDecode(readfile(SAVE_FILE)) end)
-        return success and data or {}
+        return HttpService:JSONDecode(readfile(SAVE_FILE))
     end
-    return {}
+    return {AutoJoin = false, Servers = {}}
 end
 
-local function saveServer(data)
-    local logs = getLogs()
-    -- Prevent duplicate IDs in the list
-    for _, entry in pairs(logs) do if entry.JobId == data.JobId then return end end
-    table.insert(logs, data)
-    writefile(SAVE_FILE, HttpService:JSONEncode(logs))
+local function saveData(data)
+    writefile(SAVE_FILE, HttpService:JSONEncode(data))
 end
 
--- [[ GUI CONSTRUCTION ]] --
+local currentData = getLogs()
+
+-- [[ UI CONSTRUCTION ]] --
 local sg = Instance.new("ScreenGui", LP.PlayerGui)
-sg.Name = "WaterHub_V3"
+sg.Name = "WaterHub_UI"
 
 local main = Instance.new("Frame", sg)
-main.Size = UDim2.new(0, 400, 0, 320)
-main.Position = UDim2.new(0.5, -200, 0.3, 0)
-main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+main.Size = UDim2.new(0, 450, 0, 300)
+main.Position = UDim2.new(0.5, -225, 0.4, -150)
+main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+main.BorderSizePixel = 0
 main.Active = true
 main.Draggable = true
 
-local title = Instance.new("TextLabel", main)
-title.Size = UDim2.new(1, 0, 0, 35)
-title.Text = "WATER HUB | BRAINROT DETECTOR"
-title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-title.TextColor3 = Color3.new(1, 1, 1)
+local corner = Instance.new("UICorner", main)
+corner.CornerRadius = UDim.new(0, 8)
 
-local listScroll = Instance.new("ScrollingFrame", main)
-listScroll.Size = UDim2.new(0.95, 0, 0, 180)
-listScroll.Position = UDim2.new(0.025, 0, 0.15, 0)
-listScroll.CanvasSize = UDim2.new(0, 0, 10, 0) -- Long list support
-listScroll.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-listScroll.ScrollBarThickness = 6
+-- Header
+local header = Instance.new("Frame", main)
+header.Size = UDim2.new(1, 0, 0, 40)
+header.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+header.BorderSizePixel = 0
 
--- [[ BUTTONS PANEL ]] --
-local autoBtn = Instance.new("TextButton", main)
-autoBtn.Size = UDim2.new(0.3, 0, 0, 30)
-autoBtn.Position = UDim2.new(0.025, 0, 0.75, 0)
-autoBtn.Text = "AUTO JOIN: OFF"
-autoBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-autoBtn.TextColor3 = Color3.new(1, 1, 1)
+local headerCorner = Instance.new("UICorner", header)
+local title = Instance.new("TextLabel", header)
+title.Size = UDim2.new(1, -20, 1, 0)
+title.Position = UDim2.new(0, 15, 0, 0)
+title.Text = "WATER HUB | " .. VERSION
+title.TextColor3 = ACCENT_COLOR
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Font = Enum.Font.GothamBold
+title.BackgroundTransparency = 1
 
-local clearBtn = Instance.new("TextButton", main)
-clearBtn.Size = UDim2.new(0.3, 0, 0, 30)
-clearBtn.Position = UDim2.new(0.35, 0, 0.75, 0)
-clearBtn.Text = "CLEAR LIST"
-clearBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-clearBtn.TextColor3 = Color3.new(1, 1, 1)
+-- Server List Area
+local list = Instance.new("ScrollingFrame", main)
+list.Size = UDim2.new(0, 430, 0, 180)
+list.Position = UDim2.new(0, 10, 0, 50)
+list.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+list.BorderSizePixel = 0
+list.CanvasSize = UDim2.new(0, 0, 5, 0)
+list.ScrollBarThickness = 2
 
-local huntBtn = Instance.new("TextButton", main)
-huntBtn.Size = UDim2.new(0.3, 0, 0, 30)
-huntBtn.Position = UDim2.new(0.675, 0, 0.75, 0)
-huntBtn.Text = "HUNT NEXT"
-huntBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
-huntBtn.TextColor3 = Color3.new(1, 1, 1)
+local listCorner = Instance.new("UICorner", list)
 
--- [[ LOGIC ]] --
+-- Control Panel
+local controls = Instance.new("Frame", main)
+controls.Size = UDim2.new(1, 0, 0, 60)
+controls.Position = UDim2.new(0, 0, 1, -65)
+controls.BackgroundTransparency = 1
+
+local function createBtn(name, pos, color)
+    local btn = Instance.new("TextButton", controls)
+    btn.Size = UDim2.new(0.3, -10, 0, 35)
+    btn.Position = pos
+    btn.Text = name
+    btn.BackgroundColor3 = color
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Font = Enum.Font.GothamSemibold
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    return btn
+end
+
+local autoBtn = createBtn("AUTO JOIN: " .. (currentData.AutoJoin and "ON" or "OFF"), UDim2.new(0.025, 0, 0, 0), currentData.AutoJoin and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0))
+local clearBtn = createBtn("CLEAR LIST", UDim2.new(0.35, 0, 0, 0), Color3.fromRGB(40, 40, 40))
+local huntBtn = createBtn("HUNT NEXT", UDim2.new(0.675, 0, 0, 0), ACCENT_COLOR)
+
+-- [[ FUNCTIONS ]] --
+
 local function updateUI()
-    for _, v in pairs(listScroll:GetChildren()) do if v:IsA("Frame") then v:Destroy() end end
-    local logs = getLogs()
-    for i, data in pairs(logs) do
-        local row = Instance.new("Frame", listScroll)
+    for _, v in pairs(list:GetChildren()) do if v:IsA("Frame") then v:Destroy() end end
+    for i, s in pairs(currentData.Servers) do
+        local row = Instance.new("Frame", list)
         row.Size = UDim2.new(1, -10, 0, 45)
         row.Position = UDim2.new(0, 5, 0, (i-1)*50)
-        row.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        row.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        Instance.new("UICorner", row)
 
-        local info = Instance.new("TextLabel", row)
-        info.Size = UDim2.new(0.5, 0, 1, 0)
-        info.Text = data.Name .. "\nOwner: " .. data.Owner
-        info.TextColor3 = Color3.new(1, 1, 1)
-        info.TextSize = 10
-        info.BackgroundTransparency = 1
+        local label = Instance.new("TextLabel", row)
+        label.Size = UDim2.new(0.5, 0, 1, 0)
+        label.Position = UDim2.new(0, 10, 0, 0)
+        label.Text = s.Name .. "\n" .. s.Owner
+        label.TextColor3 = Color3.new(1,1,1)
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.BackgroundTransparency = 1
+        label.Font = Enum.Font.Gotham
 
         local join = Instance.new("TextButton", row)
-        join.Size = UDim2.new(0.2, 0, 0.8, 0)
-        join.Position = UDim2.new(0.55, 0, 0.1, 0)
+        join.Size = UDim2.new(0.2, 0, 0.7, 0)
+        join.Position = UDim2.new(0.55, 0, 0.15, 0)
         join.Text = "JOIN"
-        join.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-        join.MouseButton1Click:Connect(function() 
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, data.JobId) 
-        end)
+        join.BackgroundColor3 = ACCENT_COLOR
+        join.Font = Enum.Font.GothamBold
+        Instance.new("UICorner", join)
 
         local force = Instance.new("TextButton", row)
-        force.Size = UDim2.new(0.2, 0, 0.8, 0)
-        force.Position = UDim2.new(0.78, 0, 0.1, 0)
+        force.Size = UDim2.new(0.2, 0, 0.7, 0)
+        force.Position = UDim2.new(0.77, 0, 0.15, 0)
         force.Text = "FORCE"
         force.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
-        force.MouseButton1Click:Connect(function()
-            -- Force Join tries to join even if server was full last check
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, data.JobId)
-        end)
+        force.Font = Enum.Font.GothamBold
+        Instance.new("UICorner", force)
+
+        join.MouseButton1Click:Connect(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, s.JobId) end)
+        force.MouseButton1Click:Connect(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, s.JobId) end)
     end
 end
 
-local function scanBases()
+local function scan()
     local plots = workspace:FindFirstChild("Plots") or workspace:FindFirstChild("Bases")
-    if not plots then return nil end
+    if not plots then return end
     for _, plot in pairs(plots:GetChildren()) do
         local items = plot:FindFirstChild("Items") or plot:FindFirstChild("AnimalPodiums")
         if items then
             for _, item in pairs(items:GetChildren()) do
-                local val = item:GetAttribute("Income") or item:GetAttribute("Value") or 0
+                local val = item:GetAttribute("Income") or 0
                 if val >= MIN_VALUE or item.Name:find("Ketupat") then
-                    return {Name = item.Name, Val = val, Owner = tostring(plot:GetAttribute("Owner")), JobId = game.JobId}
+                    local entry = {Name = item.Name, Owner = tostring(plot:GetAttribute("Owner")), JobId = game.JobId}
+                    table.insert(currentData.Servers, entry)
+                    saveData(currentData)
+                    return entry
                 end
             end
         end
     end
 end
 
--- [[ BUTTON CLICKS ]] --
-clearBtn.MouseButton1Click:Connect(function()
-    if isfile(SAVE_FILE) then delfile(SAVE_FILE) end
-    updateUI()
+-- [[ BUTTON LOGIC ]] --
+autoBtn.MouseButton1Click:Connect(function()
+    currentData.AutoJoin = not currentData.AutoJoin
+    saveData(currentData)
+    autoBtn.Text = "AUTO JOIN: " .. (currentData.AutoJoin and "ON" or "OFF")
+    autoBtn.BackgroundColor3 = currentData.AutoJoin and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
 end)
 
-autoBtn.MouseButton1Click:Connect(function()
-    AUTO_JOIN_ENABLED = not AUTO_JOIN_ENABLED
-    autoBtn.Text = AUTO_JOIN_ENABLED and "AUTO JOIN: ON" or "AUTO JOIN: OFF"
-    autoBtn.BackgroundColor3 = AUTO_JOIN_ENABLED and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+clearBtn.MouseButton1Click:Connect(function()
+    currentData.Servers = {}
+    saveData(currentData)
+    updateUI()
 end)
 
 huntBtn.MouseButton1Click:Connect(function()
@@ -149,14 +173,12 @@ huntBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- [[ MAIN LOOP ]] --
-task.wait(3)
+-- [[ MAIN ]] --
+task.wait(2)
 updateUI()
-local found = scanBases()
+local found = scan()
 if found then
-    saveServer(found)
     updateUI()
-    if AUTO_JOIN_ENABLED then
-        TeleportService:TeleportToPlaceInstance(game.PlaceId, found.JobId)
-    end
+else
+    if currentData.AutoJoin then huntBtn.MouseButton1Click:Fire() end
 end
